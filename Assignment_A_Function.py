@@ -26,33 +26,23 @@ import matplotlib.pyplot as plt
 
 # Calculate CTV
 def calculate_ctv(cat_year2050_G20_wide):
-    # Extract the "Emission Gap" column once to avoid repeated access
-    emission_gap = cat_year2050_G20_wide["Emission Gap"]
-    
-    # Pre-compute the columns to iterate over, excluding "Emission Gap"
-    columns_to_iterate = [col for col in cat_year2050_G20_wide.columns if col != "Emission Gap"]
-    
     ctv_list = []
     
     # Calculate the correlation squared values for each category
-    for category in columns_to_iterate:
-        # Calculate the Spearman correlation with the emission gap
-        correlation, _ = spearmanr(emission_gap, cat_year2050_G20_wide[category])
-        
-        # Only append if the correlation is not NaN or undefined
-        if not pd.isna(correlation):
+    for category in cat_year2050_G20_wide.columns:
+        if category != "Emission Gap":  # Skip the emission gap itself
+            # Calculate the Spearman correlation with the emission gap
+            correlation, _ = spearmanr(cat_year2050_G20_wide["Emission Gap"], 
+                                       cat_year2050_G20_wide[category])
+            # Append the correlation squared to the list
             ctv_list.append({"Category": category, "Correlation": correlation})
     
-    # Convert the list to a DataFrame
+    # Create DataFrame and calculate CTV
     ctv_df = pd.DataFrame(ctv_list)
-    if not ctv_df.empty:
-        # Calculate Correlation Squared and CTV
-        ctv_df["Correlation Squared"] = ctv_df["Correlation"] ** 2
-        total_correlation_squared = ctv_df["Correlation Squared"].sum()
-        ctv_df["CTV"] = ctv_df["Correlation Squared"] / total_correlation_squared
-        return ctv_df.set_index("Category")
-    else:
-        return pd.DataFrame()
+    ctv_df["Correlation Squared"] = ctv_df["Correlation"] ** 2
+    total_correlation_squared = ctv_df["Correlation Squared"].sum()
+    ctv_df["CTV"] = ctv_df["Correlation Squared"] / total_correlation_squared
+    return ctv_df.set_index("Category")
 
 # Calculate Mahalanobis distance for each row
 def calculate_mahalanobis(row, mean, inv_cov_matrix):
