@@ -17,7 +17,7 @@ Background information:
 
 #%% Import packages and functions
 
-from Assignment_A_Function import *
+from assignment_A_functions import *
 
 #%% 3. Import the provided data 
 categories = pd.read_csv("categories.csv")
@@ -76,7 +76,8 @@ print(f"Statistic: {p_value_2[0]}, p-value: {p_value_2[1]}")
 #%% 5g) Test homoscedasticity by inspecting a scatter plot
 
 plt.scatter(cat_year2050_G20_wide["Direct emissions"], cat_year2050_G20_wide["Emission Gap"])
-plt.title("Direct Emissions & Emission Gaps")
+plt.xlabel("Direct Emissions (tCO2e cap-1)")
+plt.ylabel("Emission Gap (tCO2e cap-1)")
 plt.show()
 
 # homoscedasticity = input("Is the scatter plot showing patterns of homoscedasticity? (Y/N)")
@@ -152,8 +153,7 @@ ctv_df["CTV_%"] = ctv_df["CTV"].apply(turn_percentage)
 
 #%% 6c) Indicate the choices made for this analysis
 
-# Setups the template that the client requested with 3-5 rows of information 
-# Followed by 1 blank rows and the dataframe
+# Background information setup
 information = """\
 Background information: 
     Country group: G20 countries. 
@@ -163,62 +163,22 @@ Background information:
     Method of non-parametric correlation: Spearman rank correlation
 {}"""
     
-with open("Assignment A CTV Hsuan Hsieh.csv", "w", encoding='utf-8') as f:
-    f.write(information.format("") + "\n")  # Write the information followed by a newline
+with open("contribution.csv", "w", encoding='utf-8') as f:
+    f.write(information.format("") + "\n") 
 
 # Append the DataFrame 
-ctv_df.to_csv("Assignment A CTV Hsuan Hsieh.csv", mode='a', encoding='utf-8', index=False)
+ctv_df.to_csv("contribution.csv", mode='a', encoding='utf-8', index=False)
 
 #%% 7a) Create a stacked bar plot that distinguishes the parts of the lifestyle carbon footprints below and above the 1.5°C target.
 
-plot_df = cat_year2050_G20_wide[["Emission Gap"]].merge(
-    tot_year2050_G20[["Emissions (tCO2e cap-1)"]], left_index=True, 
-    right_index=True)
-plot_df["Below target"] = median_target
-
 fig, ax = plt.subplots()
-plot_df = plot_df.sort_values(by=['Emission Gap'], ascending=True)
-
-# Create the stacked bar chart
-bar_below = ax.bar(plot_df.index.values, plot_df["Below target"], color="#92c5de")
-bar_upper = ax.bar(plot_df.index.values, plot_df["Emissions (tCO2e cap-1)"], 
-                   bottom=plot_df["Below target"], color="#f4a582")
-
-# Add the horizontal line for the 1.5°C target
-ax.axhline(y=0.61, color="#053061", linestyle="dashed", label="Median Emission Target: 0.61")
-
-# Add axis titles
-ax.set_xlabel("G20 Regions")
-ax.set_ylabel("Emissions (tCO2e)")
-
-# Insert project logo
-import matplotlib.image as image
-im = image.imread("lifestyles_logo.png")
-newax = fig.add_axes([0.13, 0.77, 0.1, 0.1], zorder=11)
-newax.imshow(im)
-newax.set_axis_off()
-
-# Define x-ticks and labels for countries
-ax.set_xticks(range(len(plot_df.index.values)))
-ax.set_xticklabels(plot_df.index.values)
-
-# Add values
-annotate_bars(ax, bar_upper, plot_df["Emissions (tCO2e cap-1)"])
-
-#%% 7c) Highlight a country of special interest to you, e.g., by presenting it in bold.
-
-# Highlight a specific country on x-axis and bars
-highlight_country_tick("AU", bar_below, bar_upper,ax)
-
-# Add legend 
-ax.legend(frameon=False, loc="center left")
-
+create_emission_gap_plot(ax, cat_year2050_G20_wide, tot_year2050_G20, median_target, "AU")
 plt.show()
 
-fig.savefig('stackbar.png', format='png', dpi=150, bbox_inches='tight')
+fig.savefig('stacked bar.png', format='png', dpi=150, bbox_inches='tight')
 
 
-#%% 7e) In a separate figure, create a pie chart based on the contributions to variance, also displaying the percentages of these different categories.
+#%% 7e) Create a pie chart based on the contributions to variance, also displaying the percentages of these different categories.
 fig, ax = plt.subplots()
 
 # Choose the symbology carefully and change the default colours
@@ -240,7 +200,7 @@ plt.subplots_adjust(left=0.1, right=0.85, top=0.9, bottom=0.1)
 plt.show()
 
 # Save the figure without large margins
-fig.savefig('piechart.png', format='png', dpi=150, bbox_inches='tight')
+fig.savefig('pie chart.png', format='png', dpi=150, bbox_inches='tight')
 
 #%% 8 Create a GUI element for user interaction
 #   8a) Create a dropdown menu to choose a country that will subsequently be highlighted in the stacked bar plot.
@@ -262,45 +222,9 @@ class PlotCanvas(FigureCanvas):
         self.plot(country_code)
 
     def plot(self, country_code):
-        # Sample data for plotting
-        plot_df = cat_year2050_G20_wide[["Emission Gap"]].merge(
-            tot_year2050_G20[["Emissions (tCO2e cap-1)"]], left_index=True, right_index=True
-        )
-        plot_df["Below target"] = median_target
-        plot_df = plot_df.sort_values(by=['Emission Gap'], ascending=True)
-
         self.ax.clear()  # Clear previous plot
-
-        # Create stacked bar chart
-        bar_below = self.ax.bar(plot_df.index.values, plot_df["Below target"], color="#92c5de")
-        bar_upper = self.ax.bar(plot_df.index.values, plot_df["Emissions (tCO2e cap-1)"], bottom=plot_df["Below target"], color="#f4a582")
-
-        # Add horizontal line for the 1.5°C target
-        self.ax.axhline(y=0.61, color="#053061", linestyle="dashed")
-
-        # Add axis titles
-        self.ax.set_xlabel("G20 Regions")
-        self.ax.set_ylabel("Emissions (tCO2e)")
-        
-        # Add values for emission gap
-        for index, rect in enumerate(bar_upper):
-            value = plot_df["Emissions (tCO2e cap-1)"].iloc[index]
-            rounded_value = round(value, 1)
-            self.ax.text(rect.get_x() + rect.get_width() / 2, 
-                    rect.get_y() + rect.get_height() + 0.1,  # Positioning above the bar
-                    str(rounded_value),
-                    ha="center", va="bottom")
-
-        # Highlight selected country
-        xticks = self.ax.get_xticklabels()
-        for i, tick in enumerate(xticks):
-            if plot_df.index[i] == country_code:
-                tick.set_fontweight("bold")
-                tick.set_color("#b2182b")
-                bar_below[i].set_color("#4393c3")
-                bar_upper[i].set_color("#d6604d")
-
-        self.draw()  # Redraw the canvas with updated plot
+        create_emission_gap_plot(self.ax, cat_year2050_G20_wide, tot_year2050_G20, median_target, country_code)
+        self.draw() 
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -362,8 +286,8 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     mainWin = MainWindow()
-    sys.exit(app.exec_())
-    
+    sys.exit(app.exec_())    
+
 #%% Optimization
 import cProfile
 import pstats
@@ -401,6 +325,3 @@ pr.disable()  # Stop profiling
 # Create stats object to sort and print results
 ps = pstats.Stats(pr).strip_dirs().sort_stats('cumulative')
 ps.print_stats(10)  # Print the top 10 results
-
-
-
