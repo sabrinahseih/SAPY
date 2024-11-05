@@ -52,22 +52,7 @@ cat_year2050_G20_wide["Emission Gap"] = tot_year2050_G20["Emissions (tCO2e cap-1
 
 #%% 5b) Calculate the contribution to variance (CTV) to check how much each consumption category contributes to the variation in the gaps.
 
-ctv_list = []
-
-for category in cat_year2050_G20_wide.columns:
-    if category != "Emission Gap":  # Skip the emission gap itself
-        # Calculate the Spearman correlation with the emission gap
-        correlation, _ = spearmanr(cat_year2050_G20_wide["Emission Gap"], 
-                                   cat_year2050_G20_wide[category])
-        # Append the correlation squared to the list
-        ctv_list.append({"Category": category, "Correlation": correlation})
-  
-
-ctv_df = pd.DataFrame(ctv_list)
-ctv_df["Correlation Squared"] = ctv_df["Correlation"] ** 2
-total_correlation_squared = ctv_df["Correlation Squared"].sum()
-ctv_df["CTV"] = ctv_df["Correlation Squared"] / total_correlation_squared
-ctv_df = ctv_df.set_index("Category")
+ctv_df = calculate_ctv(cat_year2050_G20_wide)
 
 #%% 5c) Identify the category with the largest contribution to variance.
 
@@ -94,7 +79,8 @@ plt.scatter(cat_year2050_G20_wide["Direct emissions"], cat_year2050_G20_wide["Em
 plt.title("Direct Emissions & Emission Gaps")
 plt.show()
 
-homoscedasticity = input("Is the scatter plot showing patterns of homoscedasticity? (Y/N)")
+# homoscedasticity = input("Is the scatter plot showing patterns of homoscedasticity? (Y/N)")
+homoscedasticity = "Y"
 
 if homoscedasticity == "Y":
     True
@@ -217,13 +203,7 @@ ax.set_xticks(range(len(plot_df.index.values)))
 ax.set_xticklabels(plot_df.index.values)
 
 # Add values
-for index, rect in enumerate(bar_upper):
-    value = plot_df["Emissions (tCO2e cap-1)"].iloc[index]
-    rounded_value = round(value, 1)
-    ax.text(rect.get_x() + rect.get_width() / 2, 
-            rect.get_y() + rect.get_height() + 0.1,  # Positioning above the bar
-            str(rounded_value),
-            ha="center", va="bottom")
+annotate_bars(ax, bar_upper, plot_df["Emissions (tCO2e cap-1)"])
 
 #%% 7c) Highlight a country of special interest to you, e.g., by presenting it in bold.
 
@@ -244,10 +224,10 @@ fig, ax = plt.subplots()
 # Choose the symbology carefully and change the default colours
 colors = ['#b2182b','#d6604d','#f4a582','#fddbc7','#d1e5f0','#92c5de','#4393c3','#2166ac']
 ctv_df = ctv_df.sort_values(by=['CTV'], ascending=False)
-plt.pie(ctv_df["CTV"], startangle=90, colors=colors)
+plt.pie(ctv_df["CTV_%"], startangle=90, colors=colors)
 
 # Add a legend where relevant
-handles = [f"{label}: {value:.2f}%" for label, value in zip(ctv_df.index.values, ctv_df["CTV"])]
+handles = [f"{label}: {value:.2f}%" for label, value in zip(ctv_df.index.values, ctv_df["CTV_%"])]
 plt.legend(handles, loc="center left", bbox_to_anchor=(0.95, 0.5), frameon=False)
 
 im = image.imread("lifestyles_logo.png")
@@ -261,32 +241,6 @@ plt.show()
 
 # Save the figure without large margins
 fig.savefig('piechart.png', format='png', dpi=150, bbox_inches='tight')
-
-#%% Figure for the presentation
-
-x= ctv_df.index
-y= ctv_df["CTV_%"]
-fig, ax = plt.subplots()
-plt.bar(x,y, color="#f4a582")
-fig.autofmt_xdate()
-
-for index, value in enumerate(y):
-    rounded_value = round(value, 2)
-    plt.text(index, value + 0.5,  # Adjust the offset as needed
-             str(rounded_value),
-             ha="center")
-    
-im = image.imread("lifestyles_logo.png")
-newax = fig.add_axes([0.8, 0.77, 0.1, 0.1], zorder=11)
-newax.imshow(im)
-newax.set_axis_off()
-
-ax.set_xlabel("Category")
-ax.set_ylabel("CTV(%)")
-
-plt.show()
-
-fig.savefig('CTV.png', format='png', dpi=150, bbox_inches='tight')
 
 #%% 8 Create a GUI element for user interaction
 #   8a) Create a dropdown menu to choose a country that will subsequently be highlighted in the stacked bar plot.
@@ -409,3 +363,54 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     mainWin = MainWindow()
     sys.exit(app.exec_())
+    
+#%% Optimization
+import cProfile
+import pstats
+
+# Define the slow function
+def calculate_ctv(cat_year2050_G20_wide):
+    # Extract the "Emission Gap" column once to avoid repeated access
+    emission_gap = cat_year2050_G20_wide["Emission Gap"]
+    
+    # Pre-compute the columns to iterate over, excluding "Emission Gap"
+    columns_to_iterate = [col for col in cat_year2050_G20_wide.columns if col != "Emission Gap"]
+    
+    ctv_list = []
+    
+    # Calculate the correlation squared values for each category
+    for category in columns_to_iterate:
+        # Calculate the Spearman correlation with the emission gap
+        correlation, _ = spearmanr(emission_gap, cat_year2050_G20_wide[category])
+        
+        # Only append if the correlation is not NaN or undefined
+        if not pd.isna(correlation):
+            ctv_list.append({"Category": category, "Correlation": correlation})
+    
+    # Convert the list to a DataFrame
+    ctv_df = pd.DataFrame(ctv_list)
+    if not ctv_df.empty:
+        # Calculate Correlation Squared and CTV
+        ctv_df["Correlation Squared"] = ctv_df["Correlation"] ** 2
+        total_correlation_squared = ctv_df["Correlation Squared"].sum()
+        ctv_df["CTV"] = ctv_df["Correlation Squared"] / total_correlation_squared
+        return ctv_df.set_index("Category")
+    else:
+        return pd.DataFrame()
+    
+# Create a profiler
+pr = cProfile.Profile()
+pr.enable()  # Start profiling
+
+# Call the function you want to profile
+cat_year2050_G20_wide["Emission Gap"] = tot_year2050_G20["Emissions (tCO2e cap-1)"] - median_target
+calculate_ctv(cat_year2050_G20_wide)  # Ensure this function is defined
+
+pr.disable()  # Stop profiling
+
+# Create stats object to sort and print results
+ps = pstats.Stats(pr).strip_dirs().sort_stats('cumulative')
+ps.print_stats(10)  # Print the top 10 results
+
+
+

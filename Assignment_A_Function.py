@@ -24,6 +24,35 @@ from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QPushButton, QComboBox, QW
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 
+# Calculate CTV
+def calculate_ctv(cat_year2050_G20_wide):
+    # Extract the "Emission Gap" column once to avoid repeated access
+    emission_gap = cat_year2050_G20_wide["Emission Gap"]
+    
+    # Pre-compute the columns to iterate over, excluding "Emission Gap"
+    columns_to_iterate = [col for col in cat_year2050_G20_wide.columns if col != "Emission Gap"]
+    
+    ctv_list = []
+    
+    # Calculate the correlation squared values for each category
+    for category in columns_to_iterate:
+        # Calculate the Spearman correlation with the emission gap
+        correlation, _ = spearmanr(emission_gap, cat_year2050_G20_wide[category])
+        
+        # Only append if the correlation is not NaN or undefined
+        if not pd.isna(correlation):
+            ctv_list.append({"Category": category, "Correlation": correlation})
+    
+    # Convert the list to a DataFrame
+    ctv_df = pd.DataFrame(ctv_list)
+    if not ctv_df.empty:
+        # Calculate Correlation Squared and CTV
+        ctv_df["Correlation Squared"] = ctv_df["Correlation"] ** 2
+        total_correlation_squared = ctv_df["Correlation Squared"].sum()
+        ctv_df["CTV"] = ctv_df["Correlation Squared"] / total_correlation_squared
+        return ctv_df.set_index("Category")
+    else:
+        return pd.DataFrame()
 
 # Calculate Mahalanobis distance for each row
 def calculate_mahalanobis(row, mean, inv_cov_matrix):
@@ -35,6 +64,25 @@ def calculate_mahalanobis(row, mean, inv_cov_matrix):
 def turn_percentage(CTV):
     CTV= CTV*100
     return(CTV)
+
+# Annotate bar values
+def annotate_bars(ax, bar_container, values, y_offset=0.1, round_digits=1):
+    """
+    Annotates bar chart with values above each bar.
+    
+    Parameters:
+    - ax: matplotlib Axes object where bars are drawn.
+    - bar_container: List of matplotlib bar objects (e.g., the result of ax.bar()).
+    - values: List or pandas Series of values to display on the bars.
+    - y_offset: Float, vertical offset above each bar for text placement.
+    - round_digits: Integer, number of decimal places to round the values.
+    """
+    for index, rect in enumerate(bar_container):
+        value = round(values.iloc[index], round_digits)
+        ax.text(rect.get_x() + rect.get_width() / 2, 
+                rect.get_y() + rect.get_height() + y_offset,  # Positioning above the bar
+                str(value),
+                ha="center", va="bottom")
 
 # Highlight the country in the tick and the bar
 def highlight_country_tick(country_code, bar_below, bar_upper, ax):
